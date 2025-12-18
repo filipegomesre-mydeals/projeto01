@@ -1,3 +1,8 @@
+'use client'
+
+import { useState } from 'react'
+import { createBrowserClient } from '@supabase/ssr' // Mudança aqui
+import { useRouter } from 'next/navigation'
 import IconFacebook from '@/components/icons/icon-facebook'
 import IconGoogle from '@/components/icons/icon-google'
 import { Button } from '@/components/ui/button'
@@ -8,6 +13,50 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 export default function Login() {
+    // --- Lógica de Autenticação ---
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+    const [loading, setLoading] = useState(false)
+    const [errorMessage, setErrorMessage] = useState<string | null>(null)
+    const router = useRouter()
+
+    // Nova forma de criar o cliente Supabase
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    
+    async function handleLogin(e: React.FormEvent) {
+        e.preventDefault()
+        setLoading(true)
+        setErrorMessage(null)
+
+        // 1. Tenta autenticar no Supabase
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        })
+
+        if (error) {
+            setErrorMessage(error.message)
+            setLoading(false)
+            return
+        }
+
+        // 2. Chama a tua função RPC para verificar se é Master
+        const { data: isMaster } = await supabase.rpc('is_core_gestor_ou_admin')
+
+        // 3. Redirecionamento baseado no Role
+        if (isMaster) {
+            router.push('/master-dashboard')
+        } else {
+            router.push('/backoffice-dashboard')
+        }
+        
+        router.refresh()
+    }
+    // ----------------------------
+
     return (
         <div className="grid h-screen w-full gap-5 p-4 md:grid-cols-2">
             <div className="relative hidden overflow-hidden rounded-[20px] bg-[#3B06D2] p-4 md:block md:h-full">
@@ -37,8 +86,7 @@ export default function Login() {
                         Turn your ideas into reality.
                     </h2>
                     <p className="text-sm lg:text-xl/[30px]">
-                        Encourages making dreams tangible through effort and
-                        creativity.
+                        Encourages making dreams tangible through effort and creativity.
                     </p>
                 </div>
             </div>
@@ -55,21 +103,13 @@ export default function Login() {
                     <CardContent className="space-y-[30px]">
                         <div className="grid grid-cols-2 gap-4">
                             <Link href="#">
-                                <Button
-                                    variant={'outline-general'}
-                                    size={'large'}
-                                    className="w-full"
-                                >
+                                <Button variant={'outline-general'} size={'large'} className="w-full">
                                     <IconGoogle className="size-[18px]!" />
                                     Google
                                 </Button>
                             </Link>
                             <Link href="#">
-                                <Button
-                                    variant={'outline-general'}
-                                    size={'large'}
-                                    className="w-full"
-                                >
+                                <Button variant={'outline-general'} size={'large'} className="w-full">
                                     <IconFacebook className="size-[18px]! text-[#0866FF]" />
                                     Facebook
                                 </Button>
@@ -82,19 +122,10 @@ export default function Login() {
                             </p>
                             <span className="h-px w-full bg-[#E2E4E9]"></span>
                         </div>
-                        <form className="space-y-[30px]">
+                        
+                        {/* FORMULÁRIO COM LÓGICA */}
+                        <form onSubmit={handleLogin} className="space-y-[30px]">
                             <div className="relative space-y-3">
-                                <label className="block font-semibold leading-none text-black dark:text-white">
-                                    Username
-                                </label>
-                                <Input
-                                    type="text"
-                                    variant={'input-form'}
-                                    placeholder="Victoria Gillham"
-                                    iconRight={<User className="size-[18px]" />}
-                                />
-                            </div>
-                            <div className="mb-2.5! relative space-y-3">
                                 <label className="block font-semibold leading-none text-black dark:text-white">
                                     Email address
                                 </label>
@@ -102,45 +133,53 @@ export default function Login() {
                                     type="email"
                                     variant={'input-form'}
                                     placeholder="username@domain.com"
-                                    iconRight={
-                                        <AtSign className="size-[18px]" />
-                                    }
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                    iconRight={<AtSign className="size-[18px]" />}
                                 />
                             </div>
-                            <div className="flex items-center gap-2">
-                                <TriangleAlert className="size-[18px] shrink-0 text-danger dark:text-danger/70" />
-                                <p className="text-xs/tight font-medium text-danger dark:text-danger/70">
-                                    Please enter an email address in the format{' '}
-                                    <span className="font-bold">
-                                        username@gmail.com
-                                    </span>
-                                </p>
-                            </div>
-                            <div className="mb-4! relative space-y-3">
+
+                            <div className="relative space-y-3">
                                 <label className="block font-semibold leading-none text-black dark:text-white">
                                     Password
                                 </label>
                                 <Input
                                     type="password"
                                     variant={'input-form'}
-                                    placeholder="Abc*********"
+                                    placeholder="********"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
                                     className="rtl:pl-9 rtl:pr-3.5"
                                 />
                             </div>
+
+                            {/* Alerta de Erro Dinâmico */}
+                            {errorMessage && (
+                                <div className="flex items-center gap-2 text-danger">
+                                    <TriangleAlert className="size-[18px] shrink-0" />
+                                    <p className="text-xs font-medium">{errorMessage}</p>
+                                </div>
+                            )}
+
                             <Link
                                 href="/forgot"
                                 className="block text-right text-xs/4 font-semibold text-black underline underline-offset-[3px] hover:text-[#3C3C3D] dark:text-white dark:hover:text-primary"
                             >
                                 Forgot password?
                             </Link>
+
                             <Button
                                 type="submit"
                                 variant={'black'}
                                 size={'large'}
                                 className="w-full"
+                                disabled={loading}
                             >
-                                Login
+                                {loading ? 'A autenticar...' : 'Login'}
                             </Button>
+
                             <div className="text-center text-xs/4 font-semibold text-black dark:text-gray-600">
                                 Don&apos;t have an account?
                                 <Link
